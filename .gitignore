@@ -1,0 +1,11 @@
+data/
+venv/
+tmp_datasets/
+
+.env
+
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
