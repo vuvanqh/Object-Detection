@@ -3,7 +3,7 @@ from ultralytics import YOLO
 model = YOLO("yolov5s.pt")   
 
 data_path = "data/data.yaml"
-hyp_path = "hyp.yaml"
+hyp_path = "preproc_pipeline/hyp.yaml"
 
 #training config
 train_config = {
