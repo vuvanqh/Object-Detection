@@ -2,3 +2,5 @@ roboflow
 albumentations
 opencv-python
 ultralytics
+wandb
+pandas

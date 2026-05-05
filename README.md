@@ -124,3 +124,39 @@ The preprocessing pipeline consists of two stages:
 - If dataset is empty → check dataset names and splits
 - If labels appear incorrect → inspect `.txt` files in `data/labels/`
 
+---
+
+## Evaluation & Model Selection
+
+This section describes the evaluation pipeline used to compare different model versions and select the best one for final simulation results.
+
+### Overview
+
+The evaluation script (`eval/eval.py`) automates the following:
+- **Auto-Discovery**: Scans the `runs/detect/` directory for all `best.pt` checkpoints.
+- **Metric Calculation**: Evaluates each model on the **Test Split** (defined in `data/data.yaml`).
+- **WandB Integration**: Logs comparative metrics and visual results directly to Weights & Biases.
+
+### Running Evaluation
+
+1. **Ensure you have trained at least one model** using the training script.
+2. **Login to WandB** (if not already logged in):
+   ```bash
+   wandb login
+   ```
+3. **Execute the evaluation suite**:
+   ```bash
+   python eval/eval.py --data data/data.yaml --weights_dir runs/detect
+   ```
+
+#### Argument Explanations:
+- `--data`: Points to your dataset configuration (default: `data/data.yaml`).
+- `--weights_dir`: The folder where all training results are stored (default: `runs/detect`). The script will look into every sub-folder here for a `best.pt` file.
+- `--project`: The name of the project as it will appear in your WandB dashboard.
+
+### Key Metrics
+- **mAP50**: Overall detection accuracy (IoU > 0.5).
+- **mAP50-95**: High-precision detection accuracy (averaged over IoU 0.5 to 0.95).
+- **Confusion Matrix**: Visualized per model in the WandB dashboard to analyze class confusion.
+- **Comparison Table**: A unified table in WandB to quickly identify the top-performing model.
+

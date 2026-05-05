@@ -13,5 +13,8 @@ train_config = {
     "epochs": 50,
     "device": "cuda", 
     "workers": 4,
-    "hyp": hyp_path,
+    "hyp": hyp_path,                       
+    "project": "Object-Detection-Human-Tent", # Groups results in WandB
+    "name": "yolov5s_v1"                   # Name of this specific experiment
 }
+
