@@ -1,6 +1,8 @@
 data/
+runs/
 venv/
 tmp_datasets/
+wandb/
 
 .env
 
@@ -9,3 +11,6 @@ __pycache__/
 *.pyo
 *.pyd
 *.so
+*.pt
+
+.vscode/
