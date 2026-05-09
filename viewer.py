@@ -15,7 +15,6 @@ class ObjectDetectionViewer:
         self.root.title("DISASTER RESPONSE UAS: SIMPLE OBJECT DETECTION OPERATOR VIEWER")
         self.root.geometry("1200x600")
         self.root.configure(bg="#2b2b2b")
-        
         self.model = None
         # Try loading a default model if available
         self.default_model_path = "best.pt" 
@@ -27,9 +26,14 @@ class ObjectDetectionViewer:
         
         self.image_paths = []
         self.current_image_path = None
+        self.raw_original_image = None
+        self.pred_original_image = None
+        self.raw_zoom = 1.0
+        self.pred_zoom = 1.0
+        self.zoom_options = [25, 50, 75, 100, 125, 150, 175, 200, 300, 400]
         
         self.setup_ui()
-        
+
     def setup_ui(self):
         # Header
         header_frame = tk.Frame(self.root, bg="#1a1a1a", height=40)
@@ -39,6 +43,17 @@ class ObjectDetectionViewer:
         header_label = tk.Label(header_frame, text="DISASTER RESPONSE UAS: SIMPLE OBJECT DETECTION OPERATOR VIEWER", 
                                 bg="#1a1a1a", fg="white", font=("Arial", 14, "bold"))
         header_label.pack(side=tk.LEFT, padx=10, pady=5)
+
+        help_btn = tk.Button(
+            header_frame,
+            text="HELP",
+            bg="#444444",
+            fg="white",
+            font=("Arial", 10, "bold"),
+            relief=tk.FLAT,
+            command=self.show_help,
+        )
+        help_btn.pack(side=tk.RIGHT, padx=10, pady=5)
         
         # Main content
         main_frame = tk.Frame(self.root, bg="#2b2b2b")
@@ -52,8 +67,17 @@ class ObjectDetectionViewer:
         files_label = tk.Label(left_panel, text="FILES", bg="#1a1a1a", fg="white", font=("Arial", 10, "bold"))
         files_label.pack(side=tk.TOP, fill=tk.X)
         
-        self.listbox = tk.Listbox(left_panel, bg="white", fg="black", selectbackground="#cccccc", font=("Arial", 10))
-        self.listbox.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=5, pady=5)
+        listbox_frame = tk.Frame(left_panel, bg="#333333")
+        listbox_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=5, pady=5)
+        listbox_frame.grid_rowconfigure(0, weight=1)
+        listbox_frame.grid_columnconfigure(0, weight=1)
+
+        self.listbox = tk.Listbox(listbox_frame, bg="white", fg="black", selectbackground="#cccccc", font=("Arial", 10))
+        files_scrollbar = tk.Scrollbar(listbox_frame, orient=tk.VERTICAL, command=self.listbox.yview)
+        self.listbox.configure(yscrollcommand=files_scrollbar.set)
+
+        self.listbox.grid(row=0, column=0, sticky="nsew")
+        files_scrollbar.grid(row=0, column=1, sticky="ns")
         self.listbox.bind('<<ListboxSelect>>', self.on_image_select)
         
         load_folder_btn = tk.Button(left_panel, text="LOAD FOLDER", bg="#444444", fg="white", font=("Arial", 10, "bold"), 
@@ -68,25 +92,68 @@ class ObjectDetectionViewer:
                             command=self.run_detection, relief=tk.FLAT)
         run_btn.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
         
+        image_panes = tk.PanedWindow(main_frame, orient=tk.HORIZONTAL, bg="#2b2b2b", sashwidth=8, showhandle=False)
+        image_panes.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
         # Middle Panel (Raw Image)
-        mid_panel = tk.Frame(main_frame, bg="#333333")
-        mid_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
-        
+        mid_panel = tk.Frame(image_panes, bg="#333333")
+        image_panes.add(mid_panel, minsize=220)
+
         raw_label = tk.Label(mid_panel, text="RAW AERIAL IMAGE", bg="#1a1a1a", fg="white", font=("Arial", 10, "bold"))
         raw_label.pack(side=tk.TOP, fill=tk.X)
-        
-        self.raw_canvas = tk.Label(mid_panel, bg="#444444", text="No Image Selected", fg="white", font=("Arial", 12))
+
+        raw_controls = tk.Frame(mid_panel, bg="#333333")
+        raw_controls.pack(side=tk.TOP, fill=tk.X, padx=5, pady=(5, 0))
+
+        tk.Label(raw_controls, text="Zoom:", bg="#333333", fg="white", font=("Arial", 9, "bold")).pack(side=tk.LEFT, padx=(0, 6))
+        self.raw_zoom_var = tk.StringVar(value="100%")
+        raw_zoom_menu = tk.OptionMenu(raw_controls, self.raw_zoom_var, *[f"{z}%" for z in self.zoom_options], command=lambda _: self.set_zoom("raw"))
+        raw_zoom_menu.configure(bg="#444444", fg="white", highlightthickness=0, relief=tk.FLAT)
+        raw_zoom_menu["menu"].configure(bg="white", fg="black")
+        raw_zoom_menu.pack(side=tk.LEFT)
+
+        raw_unzoom_btn = tk.Button(raw_controls, text="UNZOOM", bg="#444444", fg="white", font=("Arial", 9, "bold"),
+                                   command=lambda: self.reset_zoom("raw"), relief=tk.FLAT)
+        raw_unzoom_btn.pack(side=tk.LEFT, padx=(8, 0))
+
+        self.raw_canvas = tk.Canvas(mid_panel, bg="#444444", highlightthickness=0)
         self.raw_canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=5, pady=5)
-        
+        self.raw_canvas.bind("<Double-Button-1>", lambda _event: self.increment_zoom("raw"))
+        self.raw_canvas.bind("<ButtonPress-1>", lambda event: self.start_pan("raw", event))
+        self.raw_canvas.bind("<B1-Motion>", lambda event: self.move_pan("raw", event))
+        self.raw_canvas.bind("<ButtonRelease-1>", lambda _event: self.end_pan("raw"))
+        self.raw_canvas.bind("<Configure>", lambda _event: self.refresh_canvas("raw"))
+        self.show_placeholder("raw", "No Image Selected")
+
         # Right Panel (Predicted Image)
-        right_panel = tk.Frame(main_frame, bg="#333333")
-        right_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(5, 0))
-        
+        right_panel = tk.Frame(image_panes, bg="#333333")
+        image_panes.add(right_panel, minsize=220)
+
         pred_label = tk.Label(right_panel, text="PREDICTED IMAGE (HUMAN / TENT)", bg="#1a1a1a", fg="white", font=("Arial", 10, "bold"))
         pred_label.pack(side=tk.TOP, fill=tk.X)
-        
-        self.pred_canvas = tk.Label(right_panel, bg="#444444", text="No Prediction", fg="white", font=("Arial", 12))
+
+        pred_controls = tk.Frame(right_panel, bg="#333333")
+        pred_controls.pack(side=tk.TOP, fill=tk.X, padx=5, pady=(5, 0))
+
+        tk.Label(pred_controls, text="Zoom:", bg="#333333", fg="white", font=("Arial", 9, "bold")).pack(side=tk.LEFT, padx=(0, 6))
+        self.pred_zoom_var = tk.StringVar(value="100%")
+        pred_zoom_menu = tk.OptionMenu(pred_controls, self.pred_zoom_var, *[f"{z}%" for z in self.zoom_options], command=lambda _: self.set_zoom("pred"))
+        pred_zoom_menu.configure(bg="#444444", fg="white", highlightthickness=0, relief=tk.FLAT)
+        pred_zoom_menu["menu"].configure(bg="white", fg="black")
+        pred_zoom_menu.pack(side=tk.LEFT)
+
+        pred_unzoom_btn = tk.Button(pred_controls, text="UNZOOM", bg="#444444", fg="white", font=("Arial", 9, "bold"),
+                                    command=lambda: self.reset_zoom("pred"), relief=tk.FLAT)
+        pred_unzoom_btn.pack(side=tk.LEFT, padx=(8, 0))
+
+        self.pred_canvas = tk.Canvas(right_panel, bg="#444444", highlightthickness=0)
         self.pred_canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=5, pady=5)
+        self.pred_canvas.bind("<Double-Button-1>", lambda _event: self.increment_zoom("pred"))
+        self.pred_canvas.bind("<ButtonPress-1>", lambda event: self.start_pan("pred", event))
+        self.pred_canvas.bind("<B1-Motion>", lambda event: self.move_pan("pred", event))
+        self.pred_canvas.bind("<ButtonRelease-1>", lambda _event: self.end_pan("pred"))
+        self.pred_canvas.bind("<Configure>", lambda _event: self.refresh_canvas("pred"))
+        self.show_placeholder("pred", "No Prediction")
         
         # Footer
         footer_frame = tk.Frame(self.root, bg="#1a1a1a", height=30)
@@ -129,34 +196,134 @@ class ObjectDetectionViewer:
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to load model: {e}")
 
+    def show_help(self):
+        instructions = (
+            "How to use the viewer:\n\n"
+            "1. Click LOAD FOLDER and select a directory with images.\n"
+            "2. Select an image from the FILES list to show it in RAW AERIAL IMAGE.\n"
+            "3. (Optional) Click LOAD MODEL to load a YOLO .pt model.\n"
+            "4. Click RUN DETECTION to generate the predicted image.\n\n"
+            "Image interaction:\n"
+            "- Drag the middle bar between RAW and PREDICTED panels to resize them.\n"
+            "- Double-click an image to zoom in by 25%.\n"
+            "- Use each panel's Zoom dropdown to set exact zoom.\n"
+            "- Click UNZOOM to reset zoom to 100% and recenter.\n"
+            "- Click and drag on a zoomed image to pan around.\n"
+        )
+        messagebox.showinfo("Help - Viewer Instructions", instructions)
+
     def on_image_select(self, event):
         selection = self.listbox.curselection()
         if selection:
             idx = selection[0]
             self.current_image_path = self.image_paths[idx]
-            self.display_image(self.current_image_path, self.raw_canvas)
+            self.raw_original_image = Image.open(self.current_image_path).convert("RGB")
+            self.reset_zoom("raw")
+            self.refresh_canvas("raw")
             # Clear prediction canvas
-            self.pred_canvas.configure(image='', text="Run Detection to see results")
-            self.pred_canvas.image = None
+            self.pred_original_image = None
+            self.reset_zoom("pred")
+            self.show_placeholder("pred", "Run Detection to see results")
 
-    def display_image(self, path_or_img, label_widget):
-        if isinstance(path_or_img, str):
-            img = Image.open(path_or_img)
+    def _get_state(self, target):
+        if target == "raw":
+            return self.raw_canvas, self.raw_original_image, self.raw_zoom
+        return self.pred_canvas, self.pred_original_image, self.pred_zoom
+
+    def _set_zoom_var(self, target):
+        zoom_text = f"{int(round((self.raw_zoom if target == 'raw' else self.pred_zoom) * 100))}%"
+        if target == "raw":
+            self.raw_zoom_var.set(zoom_text)
         else:
-            img = path_or_img
-            
+            self.pred_zoom_var.set(zoom_text)
+
+    def set_zoom(self, target):
+        if target == "raw":
+            selected = self.raw_zoom_var.get()
+            self.raw_zoom = float(selected.rstrip("%")) / 100.0
+        else:
+            selected = self.pred_zoom_var.get()
+            self.pred_zoom = float(selected.rstrip("%")) / 100.0
+        self.refresh_canvas(target)
+
+    def increment_zoom(self, target):
+        if target == "raw":
+            if self.raw_original_image is None:
+                return
+            self.raw_zoom *= 1.25
+        else:
+            if self.pred_original_image is None:
+                return
+            self.pred_zoom *= 1.25
+        self._set_zoom_var(target)
+        self.refresh_canvas(target)
+
+    def reset_zoom(self, target):
+        if target == "raw":
+            self.raw_zoom = 1.0
+        else:
+            self.pred_zoom = 1.0
+        self._set_zoom_var(target)
+        self.refresh_canvas(target)
+        canvas = self.raw_canvas if target == "raw" else self.pred_canvas
+        canvas.xview_moveto(0.0)
+        canvas.yview_moveto(0.0)
+
+    def show_placeholder(self, target, text):
+        canvas = self.raw_canvas if target == "raw" else self.pred_canvas
+        canvas.delete("all")
+        canvas.configure(scrollregion=(0, 0, max(canvas.winfo_width(), 1), max(canvas.winfo_height(), 1)))
+        canvas.image = None
+
+    def start_pan(self, target, event):
+        canvas, original_img, _ = self._get_state(target)
+        if original_img is None:
+            return
+        canvas.scan_mark(event.x, event.y)
+
+    def move_pan(self, target, event):
+        canvas, original_img, _ = self._get_state(target)
+        if original_img is None:
+            return
+        canvas.scan_dragto(event.x, event.y, gain=1)
+
+    def end_pan(self, target):
+        return
+
+    def refresh_canvas(self, target):
+        label_widget, original_img, zoom_factor = self._get_state(target)
+        if original_img is None:
+            return
+
+        prev_x = label_widget.xview()[0]
+        prev_y = label_widget.yview()[0]
+
         label_widget.update()
-        canvas_width = label_widget.winfo_width()
-        canvas_height = label_widget.winfo_height()
-        
+        canvas_width = max(label_widget.winfo_width(), 1)
+        canvas_height = max(label_widget.winfo_height(), 1)
         if canvas_width <= 1 or canvas_height <= 1:
             canvas_width, canvas_height = 400, 400
-            
-        # Maintain aspect ratio
-        img.thumbnail((canvas_width, canvas_height), Image.Resampling.LANCZOS)
-        photo = ImageTk.PhotoImage(img)
-        
-        label_widget.configure(image=photo, text="")
+
+        base_scale = min(canvas_width / original_img.width, canvas_height / original_img.height)
+        render_scale = max(base_scale * zoom_factor, 0.01)
+        render_width = max(int(original_img.width * render_scale), 1)
+        render_height = max(int(original_img.height * render_scale), 1)
+
+        rendered = original_img.resize((render_width, render_height), Image.Resampling.LANCZOS)
+        photo = ImageTk.PhotoImage(rendered)
+        label_widget.delete("all")
+        if render_width <= canvas_width and render_height <= canvas_height:
+            x = (canvas_width - render_width) / 2
+            y = (canvas_height - render_height) / 2
+            label_widget.create_image(x, y, image=photo, anchor=tk.NW)
+            label_widget.configure(scrollregion=(0, 0, canvas_width, canvas_height))
+            label_widget.xview_moveto(0.0)
+            label_widget.yview_moveto(0.0)
+        else:
+            label_widget.create_image(0, 0, image=photo, anchor=tk.NW)
+            label_widget.configure(scrollregion=(0, 0, render_width, render_height))
+            label_widget.xview_moveto(prev_x)
+            label_widget.yview_moveto(prev_y)
         label_widget.image = photo
 
     def run_detection(self):
@@ -170,7 +337,7 @@ class ObjectDetectionViewer:
             
         try:
             # Change text to indicate processing
-            self.pred_canvas.configure(image='', text="Processing...")
+            self.show_placeholder("pred", "Processing...")
             self.root.update()
             
             # Run inference
@@ -181,12 +348,11 @@ class ObjectDetectionViewer:
             
             # Convert BGR to RGB for PIL
             res_rgb = cv2.cvtColor(res_plotted, cv2.COLOR_BGR2RGB)
-            pil_img = Image.fromarray(res_rgb)
-            
-            self.display_image(pil_img, self.pred_canvas)
+            self.pred_original_image = Image.fromarray(res_rgb)
+            self.reset_zoom("pred")
         except Exception as e:
             messagebox.showerror("Error", f"Detection failed: {e}")
-            self.pred_canvas.configure(text="Detection failed")
+            self.show_placeholder("pred", "Detection failed")
 
 if __name__ == "__main__":
     root = tk.Tk()
