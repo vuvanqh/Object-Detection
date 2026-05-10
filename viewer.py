@@ -92,12 +92,15 @@ class ObjectDetectionViewer:
                             command=self.run_detection, relief=tk.FLAT)
         run_btn.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
         
-        image_panes = tk.PanedWindow(main_frame, orient=tk.HORIZONTAL, bg="#2b2b2b", sashwidth=8, showhandle=False)
-        image_panes.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        image_area = tk.Frame(main_frame, bg="#2b2b2b")
+        image_area.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        image_area.grid_rowconfigure(0, weight=1)
+        image_area.grid_columnconfigure(0, weight=1, uniform="images")
+        image_area.grid_columnconfigure(2, weight=1, uniform="images")
 
         # Middle Panel (Raw Image)
-        mid_panel = tk.Frame(image_panes, bg="#333333")
-        image_panes.add(mid_panel, minsize=220)
+        mid_panel = tk.Frame(image_area, bg="#333333")
+        mid_panel.grid(row=0, column=0, sticky="nsew")
 
         raw_label = tk.Label(mid_panel, text="RAW AERIAL IMAGE", bg="#1a1a1a", fg="white", font=("Arial", 10, "bold"))
         raw_label.pack(side=tk.TOP, fill=tk.X)
@@ -125,9 +128,12 @@ class ObjectDetectionViewer:
         self.raw_canvas.bind("<Configure>", lambda _event: self.refresh_canvas("raw"))
         self.show_placeholder("raw", "No Image Selected")
 
+        divider = tk.Frame(image_area, bg="#2b2b2b", width=8)
+        divider.grid(row=0, column=1, sticky="ns")
+
         # Right Panel (Predicted Image)
-        right_panel = tk.Frame(image_panes, bg="#333333")
-        image_panes.add(right_panel, minsize=220)
+        right_panel = tk.Frame(image_area, bg="#333333")
+        right_panel.grid(row=0, column=2, sticky="nsew")
 
         pred_label = tk.Label(right_panel, text="PREDICTED IMAGE (HUMAN / TENT)", bg="#1a1a1a", fg="white", font=("Arial", 10, "bold"))
         pred_label.pack(side=tk.TOP, fill=tk.X)
@@ -204,7 +210,7 @@ class ObjectDetectionViewer:
             "3. (Optional) Click LOAD MODEL to load a YOLO .pt model.\n"
             "4. Click RUN DETECTION to generate the predicted image.\n\n"
             "Image interaction:\n"
-            "- Drag the middle bar between RAW and PREDICTED panels to resize them.\n"
+            "- The middle divider is fixed in the center.\n"
             "- Double-click an image to zoom in by 25%.\n"
             "- Use each panel's Zoom dropdown to set exact zoom.\n"
             "- Click UNZOOM to reset zoom to 100% and recenter.\n"
