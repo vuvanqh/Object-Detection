@@ -119,10 +119,28 @@ names:
     with open(f"{ROOT}/data.yaml", "w") as f:
         f.write(yaml.strip())
 
+def dataset_exists():
+    required_paths = [
+        f"{ROOT}/images/train",
+        f"{ROOT}/images/valid",
+        f"{ROOT}/images/test",
+        f"{ROOT}/labels/train",
+        f"{ROOT}/labels/valid",
+        f"{ROOT}/labels/test",
+        f"{ROOT}/data.yaml",
+    ]
+
+    return all(os.path.exists(path) for path in required_paths)
+
 def main():
+    if dataset_exists():
+        print("Dataset already exists. Skipping preprocessing.")
+        return
+    
     if os.path.exists(TMP):
         shutil.rmtree(TMP)
     os.makedirs(TMP, exist_ok=True)
+    
     
     api_key = os.getenv("ROBOFLOW_API_KEY")
     rf = Roboflow(api_key=api_key)
